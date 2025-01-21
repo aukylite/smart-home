@@ -1,0 +1,3 @@
+# Enables the node-modules linker instead of Plug'n'Play
+nodeLinker: node-modules
+

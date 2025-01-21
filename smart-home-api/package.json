@@ -1,0 +1,7 @@
+{
+	"dependencies": {
+		"many-keys-map": "^2.0.1",
+		"mqtt": "^5.10.1",
+		"redis": "4.6.4"
+	}
+}

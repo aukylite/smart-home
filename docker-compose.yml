@@ -1,0 +1,83 @@
+volumes:
+  astro_node_modules:
+  postgres_data:
+    driver: local
+
+services:
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml
+      - ./cloudflared/fc9e09e0-3baa-437f-9198-23131cc5959e.json:/home/cloudflared/fc9e09e0-3baa-437f-9198-23131cc5959e.json
+    command: tunnel run fc9e09e0-3baa-437f-9198-23131cc5959e
+    depends_on:
+      - database
+
+  smart-home-api:
+    build: smart-home-api
+    image: smart-home-api
+    restart: "no"
+    volumes:
+      - ./smart-home-api/:/app
+      - ./app-cache/:/app-cache
+    ports:
+      - 7777:7777
+    depends_on:
+      database:
+        condition: service_healthy
+      flyway:
+        condition: service_started
+    env_file:
+      - project.env
+
+  smart-home-ui:
+    build: smart-home-ui
+    image: smart-home-ui
+    restart: "no"
+    volumes:
+      - ./smart-home-ui/:/app
+      - astro_node_modules:/app/node_modules
+    ports:
+      - 3000:3000
+    depends_on:
+      - smart-home-api
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - smart-home-api
+      - smart-home-ui
+    ports:
+      - 7800:7800
+
+  database:
+    container_name: database-server-smart-home
+    image: postgres:14.1
+    restart: "no"
+    env_file:
+      - project.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Named volume for data storage
+      - ./config/pg_hba.conf:/etc/postgresql/pg_hba.conf  # Mount pg_hba.conf outside of the data directory
+      - ./config/postgresql.conf:/etc/postgresql/postgresql.conf
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+    ports:
+      - 5432:5432
+
+  flyway:
+    image: flyway/flyway:latest
+    depends_on:
+      - database
+    volumes:
+      - ./flyway/sql/:/flyway/sql
+    command: -connectRetries=60 -baselineOnMigrate=true migrate
+    env_file:
+      - project.env
